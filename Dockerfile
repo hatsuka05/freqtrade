@@ -1,4 +1,10 @@
-FROM python:3.10.11-slim-bullseye as base
+# FOR MAC
+# docker build -t freqtrade-modify-binance-mac .
+FROM python:3.10.10-slim-bullseye as base
+
+# FOR UBUNTU
+# docker buildx build --platform linux/amd64 -t freqtrade-modify-binance .
+# FROM --platform=linux/amd64 python:3.10.10-slim-bullseye as base
 
 # Setup env
 ENV LANG C.UTF-8
