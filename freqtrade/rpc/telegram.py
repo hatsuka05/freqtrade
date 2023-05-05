@@ -323,7 +323,8 @@ class Telegram(RPCHandler):
         else:
             msg["stake_amount_fiat"] = 0
         is_fill = msg["type"] in [RPCMessageType.ENTRY_FILL]
-        emoji = "\N{CHECK MARK}" if is_fill else "\N{LARGE BLUE CIRCLE}"
+        # emoji = "\N{CHECK MARK}" if is_fill else "\N{LARGE BLUE CIRCLE}"
+        emoji = "🟢⬆⬆⬆" if msg["direction"] == "Long" else "🔴⬇⬇⬇"
 
         # TODO: dont send message if Longed or Shorted
         if is_fill:
@@ -335,30 +336,42 @@ class Telegram(RPCHandler):
             else {"enter": "Short", "entered": "Shorted"}
         )
         message = (
-            f"{emoji} *{self._exchange_from_msg(msg)}:*"
+            # f"{emoji} *{self._exchange_from_msg(msg)}:*"
+            f"{emoji} "
             f" {entry_side['entered'] if is_fill else entry_side['enter']} {msg['pair']}"
             f" (#{msg['trade_id']})\n"
         )
         message += self._add_analyzed_candle(msg["pair"])
         message += f"*Enter Tag:* `{msg['enter_tag']}`\n" if msg.get("enter_tag") else ""
-        message += f"*Amount:* `{msg['amount']:.8f}`\n"
-        if msg.get("leverage") and msg.get("leverage", 1.0) != 1.0:
-            message += f"*Leverage:* `{msg['leverage']}`\n"
+        # message += f"*Amount:* `{msg['amount']:.8f}`\n"
 
         if msg["type"] in [RPCMessageType.ENTRY_FILL]:
-            message += f"*Open Rate:* `{msg['open_rate']:.8f}`\n"
+            message += f"*Entry:* `{msg['open_rate']:.8f}`\n"
         elif msg["type"] in [RPCMessageType.ENTRY]:
             message += (
-                f"*Open Rate:* `{msg['open_rate']:.8f}`\n"
-                f"*Current Rate:* `{msg['current_rate']:.8f}`\n"
+                f"*Entry:* `{msg['open_rate']:.8f}`\n"
+                # f"*Current Rate:* `{msg['current_rate']:.8f}`\n"
             )
 
-        message += f"*Total:* `({round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
+        if msg.get("leverage") and msg.get("leverage", 1.0) != 1.0:
+            message += f"*Đòn bẩy (gợi ý):* `{round(msg['leverage'])}`\n"
 
-        if msg.get("fiat_currency"):
-            message += f", {round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])}"
+        # message += f"*Total:* `({round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
 
-        message += ")`"
+        # if msg.get("fiat_currency"):
+        #     message += f", {round_coin_value(msg['stake_amount_fiat'], msg['fiat_currency'])}"
+
+        # message += ")`"
+
+        message += f"*Stoploss:* {'nhỏ hơn' if msg['direction'] == 'Long' else 'lớn hơn'} `{msg['stoploss']:.8f}`\n"
+
+        # Get ROI
+        conf = RPC._rpc_show_config(self._config, self._rpc._freqtrade.state)
+        roi = list(conf["minimal_roi"].values())
+        message += f"*Take Profit:* `{round(roi[1]*100)}%` ~ `{round(roi[0]*100)}%`\n"
+
+        message += f"*Chú ý:* Anh em đi vol, setup đòn bẩy, quản lý vốn hợp lý.\nEntry thì nhiều nên lỡ tàu thì không ham mà chờ đợi entry sau nhé.\nBot vẫn đang giai đoạn Beta, rất mong nhận được nhiều ý kiến đóng góp của anh em để mình update.\n"
+
         return message
 
     def _format_exit_msg(self, msg: Dict[str, Any]) -> str:
@@ -462,12 +475,12 @@ class Telegram(RPCHandler):
 
         elif msg_type in (RPCMessageType.ENTRY_CANCEL, RPCMessageType.EXIT_CANCEL):
             msg["message_side"] = "enter" if msg_type in [RPCMessageType.ENTRY_CANCEL] else "exit"
-            message = (
-                f"\N{WARNING SIGN} *{self._exchange_from_msg(msg)}:* "
-                f"Cancelling {'partial ' if msg.get('sub_trade') else ''}"
-                f"{msg['message_side']} Order for {msg['pair']} "
-                f"(#{msg['trade_id']}). Reason: {msg['reason']}."
-            )
+            # message = (
+            #     f"\N{WARNING SIGN} *{self._exchange_from_msg(msg)}:* "
+            #     f"Cancelling {'partial ' if msg.get('sub_trade') else ''}"
+            #     f"{msg['message_side']} Order for {msg['pair']} "
+            #     f"(#{msg['trade_id']}). Reason: {msg['reason']}."
+            # )
 
         elif msg_type == RPCMessageType.PROTECTION_TRIGGER:
             message = (

@@ -63,6 +63,9 @@ from freqtrade.util.binance_mig import migrate_binance_futures_names
 from freqtrade.wallets import Wallets
 
 
+import talib.abstract as ta
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -1067,7 +1070,18 @@ class FreqtradeBot(LoggingMixin):
         """
         Sends rpc notification when a entry order occurred.
         """
+        # TODO: cal ATR stoploss
+        dataframe, _ = self.dataprovider.get_analyzed_dataframe(trade.pair, self.strategy.timeframe)
+        dataframe["atr"] = ta.ATR(dataframe, 14)
+        last_candle = dataframe.iloc[-1].squeeze()
+        last_atr = last_candle["atr"]
+
         open_rate = order.safe_price
+
+        # cal stoploss use ATR
+        stoploss_atr = (
+            (open_rate + last_atr * 1.5) if trade.is_short else (open_rate - last_atr * 1.5)
+        )
 
         if open_rate is None:
             open_rate = trade.open_rate
@@ -1098,6 +1112,7 @@ class FreqtradeBot(LoggingMixin):
             "open_date": trade.open_date or datetime.utcnow(),
             "current_rate": current_rate,
             "sub_trade": sub_trade,
+            "stoploss": stoploss_atr,
         }
 
         # Send the message
