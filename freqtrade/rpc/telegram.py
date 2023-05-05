@@ -325,6 +325,10 @@ class Telegram(RPCHandler):
         is_fill = msg["type"] in [RPCMessageType.ENTRY_FILL]
         emoji = "\N{CHECK MARK}" if is_fill else "\N{LARGE BLUE CIRCLE}"
 
+        # TODO: dont send message if Longed or Shorted
+        if is_fill:
+            return ""
+
         entry_side = (
             {"enter": "Long", "entered": "Longed"}
             if msg["direction"] == "Long"
@@ -358,6 +362,8 @@ class Telegram(RPCHandler):
         return message
 
     def _format_exit_msg(self, msg: Dict[str, Any]) -> str:
+        # TODO: dont send message when exit
+        return ""
         msg["amount"] = round(msg["amount"], 8)
         msg["profit_percent"] = round(msg["profit_ratio"] * 100, 2)
         msg["duration"] = msg["close_date"].replace(microsecond=0) - msg["open_date"].replace(
