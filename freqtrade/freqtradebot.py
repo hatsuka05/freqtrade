@@ -1070,18 +1070,55 @@ class FreqtradeBot(LoggingMixin):
         """
         Sends rpc notification when a entry order occurred.
         """
-        # TODO: cal ATR stoploss
+        # last candle
         dataframe, _ = self.dataprovider.get_analyzed_dataframe(trade.pair, self.strategy.timeframe)
-        dataframe["atr"] = ta.ATR(dataframe, 14)
         last_candle = dataframe.iloc[-1].squeeze()
-        last_atr = last_candle["atr"]
+        close = last_candle["close"]
+        high = last_candle["high"]
+        low = last_candle["low"]
+        rsi = last_candle["rsi"]
+        macd = last_candle["macd"]
+        macd_signal = last_candle["macdsignal"]
+        macd_diff = abs(round(((macd - macd_signal) / macd_signal) * 100, 1))
+        sma200 = last_candle["sma200"]
+        sma100 = last_candle["sma100"]
+        sma50 = last_candle["sma50"]
 
-        open_rate = order.safe_price
+        # noti rsi
+        rsi_status = "quá bán" if rsi < 30 else "quá mua" if rsi > 70 else "rsi trung lập"
+        rsi_noti = f"rsi ~`{rsi}`, {rsi_status}"
 
-        # cal stoploss use ATR
-        stoploss_atr = (
-            (open_rate + last_atr * 1.5) if trade.is_short else (open_rate - last_atr * 1.5)
+        # noti macd
+        macd_noti = f"macd `{macd}`, signal `{macd_signal}`, macd cách signal `{macd_diff}%`"
+
+        # noti MA
+        sma50_status = "giá nằm trên MA50" if close >= sma50 else "giá nằm dưới MA50"
+        sma100_status = "giá nằm trên MA100" if close >= sma100 else "giá nằm dưới MA100"
+        sma200_status = "giá nằm trên MA200" if close >= sma200 else "giá nằm dưới MA200"
+        ma_noti = f"{sma200_status}. {sma100_status}. {sma50_status}"
+
+        # log kháng cự, hỗ trợ gần nhất
+        recent_bu_ob = dataframe.tail(250).loc[dataframe["bull_ob"] == 1]
+        recent_be_ob = dataframe.tail(250).loc[dataframe["bear_ob"] == 1]
+        # last_bu_ob = recent_bu_ob.iloc[-1]["low"] if not recent_bu_ob.empty else None
+        # last_be_ob = recent_be_ob.iloc[-1]["high"] if not recent_be_ob.empty else None
+        bu_ob = recent_bu_ob["low"].min() if not recent_bu_ob.empty else None
+        be_ob = recent_be_ob["high"].max() if not recent_be_ob.empty else None
+        bu_ob_noti = f"Support ~`{bu_ob}`. " if bu_ob is not None else ""
+        be_ob_noti = f"Resistance ~`{be_ob}`" if be_ob is not None else ""
+        ob_noti = f"{bu_ob_noti}{be_ob_noti}"
+
+        # Format entry
+        open_rate = (
+            high
+            if (trade.is_short and (high > order.safe_price))
+            else low
+            if ((not trade.is_short) and (low < order.safe_price))
+            else order.safe_price
         )
+
+        # stoploss use ATR
+        sl = last_candle["stoploss_short"] if trade.is_short else last_candle["stoploss_long"]
 
         if open_rate is None:
             open_rate = trade.open_rate
@@ -1112,7 +1149,12 @@ class FreqtradeBot(LoggingMixin):
             "open_date": trade.open_date or datetime.utcnow(),
             "current_rate": current_rate,
             "sub_trade": sub_trade,
-            "stoploss": stoploss_atr,
+            "stoploss": sl,
+            "ob_noti": ob_noti,
+            "rsi_noti": rsi_noti,
+            "macd_noti": macd_noti,
+            "ma_noti": ma_noti,
+            "logs": "",
         }
 
         # Send the message

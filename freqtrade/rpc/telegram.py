@@ -353,9 +353,6 @@ class Telegram(RPCHandler):
                 # f"*Current Rate:* `{msg['current_rate']:.8f}`\n"
             )
 
-        if msg.get("leverage") and msg.get("leverage", 1.0) != 1.0:
-            message += f"*Đòn bẩy (gợi ý):* `{round(msg['leverage'])}`\n"
-
         # message += f"*Total:* `({round_coin_value(msg['stake_amount'], msg['stake_currency'])}"
 
         # if msg.get("fiat_currency"):
@@ -363,14 +360,26 @@ class Telegram(RPCHandler):
 
         # message += ")`"
 
-        message += f"*Stoploss:* {'nhỏ hơn' if msg['direction'] == 'Long' else 'lớn hơn'} `{msg['stoploss']:.8f}`\n"
+        message += (
+            f"*Stoploss:* {'<' if msg['direction'] == 'Long' else '>'} `{msg['stoploss']:.8f}xxx`\n"
+        )
 
         # Get ROI
         conf = RPC._rpc_show_config(self._config, self._rpc._freqtrade.state)
         roi = list(conf["minimal_roi"].values())
         message += f"*Take Profit:* `{round(roi[1]*100)}%` ~ `{round(roi[0]*100)}%`\n"
 
-        message += f"*Chú ý:* Anh em đi vol, setup đòn bẩy, quản lý vốn hợp lý.\nEntry thì nhiều nên lỡ tàu thì không ham mà chờ đợi entry sau nhé.\nBot vẫn đang giai đoạn Beta, rất mong nhận được nhiều ý kiến đóng góp của anh em để mình update.\n"
+        message += "-------------------\n"
+        message += f"*Support level (Suggest):* {msg['ob_noti']}\n"
+        if msg.get("leverage") and msg.get("leverage", 1.0) != 1.0:
+            message += f"*Leverage (Suggest):* `{round(msg['leverage'])}x`\n"
+        message += f"*RSI info:* {msg['rsi_noti']}\n"
+        message += f"*MACD info:* {msg['macd_noti']}\n"
+        message += f"*EMA info:* {msg['ma_noti']}\n"
+        message += f"*Log:* {msg['logs']}\n"
+
+        message += "-------------------\n"
+        message += f"*Chú ý:* Anh em đi vol, setup đòn bẩy, quản lý vốn hợp lý.\nEntry thì nhiều nên lỡ tàu thì không ham mà chờ đợi entry sau nhé.\nRất mong nhận được nhiều ý kiến đóng góp của anh em để mình thêm nhiều chiến thuật cho anh em chơi.\n"
 
         return message
 
@@ -495,7 +504,8 @@ class Telegram(RPCHandler):
             )
 
         elif msg_type == RPCMessageType.STATUS:
-            message = f"*Status:* `{msg['status']}`"
+            # message = f"*Status:* `{msg['status']}`"
+            return None
 
         elif msg_type == RPCMessageType.WARNING:
             message = f"\N{WARNING SIGN} *Warning:* `{msg['status']}`"
@@ -1124,7 +1134,7 @@ class Telegram(RPCHandler):
         :return: None
         """
         msg = self._rpc._rpc_start()
-        self._send_msg(f"Status: `{msg['status']}`")
+        # self._send_msg(f"Status: `{msg['status']}`")
 
     @authorized_only
     def _stop(self, update: Update, context: CallbackContext) -> None:
@@ -1136,7 +1146,7 @@ class Telegram(RPCHandler):
         :return: None
         """
         msg = self._rpc._rpc_stop()
-        self._send_msg(f"Status: `{msg['status']}`")
+        # self._send_msg(f"Status: `{msg['status']}`")
 
     @authorized_only
     def _reload_config(self, update: Update, context: CallbackContext) -> None:
@@ -1148,7 +1158,7 @@ class Telegram(RPCHandler):
         :return: None
         """
         msg = self._rpc._rpc_reload_config()
-        self._send_msg(f"Status: `{msg['status']}`")
+        # self._send_msg(f"Status: `{msg['status']}`")
 
     @authorized_only
     def _stopentry(self, update: Update, context: CallbackContext) -> None:
@@ -1160,7 +1170,7 @@ class Telegram(RPCHandler):
         :return: None
         """
         msg = self._rpc._rpc_stopentry()
-        self._send_msg(f"Status: `{msg['status']}`")
+        # self._send_msg(f"Status: `{msg['status']}`")
 
     @authorized_only
     def _force_exit(self, update: Update, context: CallbackContext) -> None:
