@@ -10,7 +10,7 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from functools import partial, wraps
+from functools import wraps
 from html import escape
 from itertools import chain
 from math import isnan
@@ -22,7 +22,7 @@ from telegram import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup,
                       ReplyKeyboardMarkup, Update)
 from telegram.constants import MessageLimit, ParseMode
 from telegram.error import BadRequest, NetworkError, TelegramError
-from telegram.ext import Application, CallbackContext, CallbackQueryHandler, CommandHandler
+from telegram.ext import Application, CallbackContext
 from telegram.helpers import escape_markdown
 
 from freqtrade.__init__ import __version__
@@ -141,11 +141,14 @@ class Telegram(RPCHandler):
         Validates the keyboard configuration from telegram config
         section.
         """
-        self._keyboard: List[List[Union[str, KeyboardButton]]] = [
-            ['/daily', '/profit', '/balance'],
-            ['/status', '/status table', '/performance'],
-            ['/count', '/start', '/stop', '/help']
-        ]
+        # self._keyboard: List[List[Union[str, KeyboardButton]]] = [
+        #     ['/daily', '/profit', '/balance'],
+        #     ['/status', '/status table', '/performance'],
+        #     ['/count', '/start', '/stop', '/help']
+        # ]
+        # TODO: [stable-v2024] Custom code de user khong click duoc button trong tele
+        self._keyboard: List[List[Union[str, KeyboardButton]]] = []
+
         # do not allow commands with mandatory arguments and critical cmds
         # TODO: DRY! - its not good to list all valid cmds here. But otherwise
         #       this needs refactoring of the whole telegram module (same
@@ -170,6 +173,7 @@ class Telegram(RPCHandler):
 
         # custom keyboard specified in config.json
         cust_keyboard = self._config['telegram'].get('keyboard', [])
+
         if cust_keyboard:
             combined = "(" + ")|(".join(valid_keys) + ")"
             # check for valid shortcuts
@@ -204,74 +208,76 @@ class Telegram(RPCHandler):
         self._app = self._init_telegram_app()
 
         # Register command handler and start telegram message polling
-        handles = [
-            CommandHandler('status', self._status),
-            CommandHandler('profit', self._profit),
-            CommandHandler('balance', self._balance),
-            CommandHandler('start', self._start),
-            CommandHandler('stop', self._stop),
-            CommandHandler(['forcesell', 'forceexit', 'fx'], self._force_exit),
-            CommandHandler(['forcebuy', 'forcelong'], partial(
-                self._force_enter, order_side=SignalDirection.LONG)),
-            CommandHandler('forceshort', partial(
-                self._force_enter, order_side=SignalDirection.SHORT)),
-            CommandHandler('reload_trade', self._reload_trade_from_exchange),
-            CommandHandler('trades', self._trades),
-            CommandHandler('delete', self._delete_trade),
-            CommandHandler(['coo', 'cancel_open_order'], self._cancel_open_order),
-            CommandHandler('performance', self._performance),
-            CommandHandler(['buys', 'entries'], self._enter_tag_performance),
-            CommandHandler(['sells', 'exits'], self._exit_reason_performance),
-            CommandHandler('mix_tags', self._mix_tag_performance),
-            CommandHandler('stats', self._stats),
-            CommandHandler('daily', self._daily),
-            CommandHandler('weekly', self._weekly),
-            CommandHandler('monthly', self._monthly),
-            CommandHandler('count', self._count),
-            CommandHandler('locks', self._locks),
-            CommandHandler(['unlock', 'delete_locks'], self._delete_locks),
-            CommandHandler(['reload_config', 'reload_conf'], self._reload_config),
-            CommandHandler(['show_config', 'show_conf'], self._show_config),
-            CommandHandler(['stopbuy', 'stopentry'], self._stopentry),
-            CommandHandler('whitelist', self._whitelist),
-            CommandHandler('blacklist', self._blacklist),
-            CommandHandler(['blacklist_delete', 'bl_delete'], self._blacklist_delete),
-            CommandHandler('logs', self._logs),
-            CommandHandler('edge', self._edge),
-            CommandHandler('health', self._health),
-            CommandHandler('help', self._help),
-            CommandHandler('version', self._version),
-            CommandHandler('marketdir', self._changemarketdir),
-            CommandHandler('order', self._order),
-            CommandHandler('list_custom_data', self._list_custom_data),
-        ]
-        callbacks = [
-            CallbackQueryHandler(self._status_table, pattern='update_status_table'),
-            CallbackQueryHandler(self._daily, pattern='update_daily'),
-            CallbackQueryHandler(self._weekly, pattern='update_weekly'),
-            CallbackQueryHandler(self._monthly, pattern='update_monthly'),
-            CallbackQueryHandler(self._profit, pattern='update_profit'),
-            CallbackQueryHandler(self._balance, pattern='update_balance'),
-            CallbackQueryHandler(self._performance, pattern='update_performance'),
-            CallbackQueryHandler(self._enter_tag_performance,
-                                 pattern='update_enter_tag_performance'),
-            CallbackQueryHandler(self._exit_reason_performance,
-                                 pattern='update_exit_reason_performance'),
-            CallbackQueryHandler(self._mix_tag_performance, pattern='update_mix_tag_performance'),
-            CallbackQueryHandler(self._count, pattern='update_count'),
-            CallbackQueryHandler(self._force_exit_inline, pattern=r"force_exit__\S+"),
-            CallbackQueryHandler(self._force_enter_inline, pattern=r"force_enter__\S+"),
-        ]
-        for handle in handles:
-            self._app.add_handler(handle)
+        # handles = [
+        #     CommandHandler('status', self._status),
+        #     CommandHandler('profit', self._profit),
+        #     CommandHandler('balance', self._balance),
+        #     CommandHandler('start', self._start),
+        #     CommandHandler('stop', self._stop),
+        #     CommandHandler(['forcesell', 'forceexit', 'fx'], self._force_exit),
+        #     CommandHandler(['forcebuy', 'forcelong'], partial(
+        #         self._force_enter, order_side=SignalDirection.LONG)),
+        #     CommandHandler('forceshort', partial(
+        #         self._force_enter, order_side=SignalDirection.SHORT)),
+        #     CommandHandler('reload_trade', self._reload_trade_from_exchange),
+        #     CommandHandler('trades', self._trades),
+        #     CommandHandler('delete', self._delete_trade),
+        #     CommandHandler(['coo', 'cancel_open_order'], self._cancel_open_order),
+        #     CommandHandler('performance', self._performance),
+        #     CommandHandler(['buys', 'entries'], self._enter_tag_performance),
+        #     CommandHandler(['sells', 'exits'], self._exit_reason_performance),
+        #     CommandHandler('mix_tags', self._mix_tag_performance),
+        #     CommandHandler('stats', self._stats),
+        #     CommandHandler('daily', self._daily),
+        #     CommandHandler('weekly', self._weekly),
+        #     CommandHandler('monthly', self._monthly),
+        #     CommandHandler('count', self._count),
+        #     CommandHandler('locks', self._locks),
+        #     CommandHandler(['unlock', 'delete_locks'], self._delete_locks),
+        #     CommandHandler(['reload_config', 'reload_conf'], self._reload_config),
+        #     CommandHandler(['show_config', 'show_conf'], self._show_config),
+        #     CommandHandler(['stopbuy', 'stopentry'], self._stopentry),
+        #     CommandHandler('whitelist', self._whitelist),
+        #     CommandHandler('blacklist', self._blacklist),
+        #     CommandHandler(['blacklist_delete', 'bl_delete'], self._blacklist_delete),
+        #     CommandHandler('logs', self._logs),
+        #     CommandHandler('edge', self._edge),
+        #     CommandHandler('health', self._health),
+        #     CommandHandler('help', self._help),
+        #     CommandHandler('version', self._version),
+        #     CommandHandler('marketdir', self._changemarketdir),
+        #     CommandHandler('order', self._order),
+        #     CommandHandler('list_custom_data', self._list_custom_data),
+        # ]
+        # callbacks = [
+        #     CallbackQueryHandler(self._status_table, pattern='update_status_table'),
+        #     CallbackQueryHandler(self._daily, pattern='update_daily'),
+        #     CallbackQueryHandler(self._weekly, pattern='update_weekly'),
+        #     CallbackQueryHandler(self._monthly, pattern='update_monthly'),
+        #     CallbackQueryHandler(self._profit, pattern='update_profit'),
+        #     CallbackQueryHandler(self._balance, pattern='update_balance'),
+        #     CallbackQueryHandler(self._performance, pattern='update_performance'),
+        #     CallbackQueryHandler(self._enter_tag_performance,
+        #                          pattern='update_enter_tag_performance'),
+        #     CallbackQueryHandler(self._exit_reason_performance,
+        #                          pattern='update_exit_reason_performance'),
+        #     CallbackQueryHandler(self._mix_tag_performance, pattern='update_mix_tag_performance'),
+        #     CallbackQueryHandler(self._count, pattern='update_count'),
+        #     CallbackQueryHandler(self._force_exit_inline, pattern=r"force_exit__\S+"),
+        #     CallbackQueryHandler(self._force_enter_inline, pattern=r"force_enter__\S+"),
+        # ]
 
-        for callback in callbacks:
-            self._app.add_handler(callback)
+        # TODO: [stable-v2024] custom de user khong su dung duoc command /<ten command>
+        # for handle in handles:
+        #     self._app.add_handler(handle)
 
-        logger.info(
-            'rpc.telegram is listening for following commands: %s',
-            [[x for x in sorted(h.commands)] for h in handles]
-        )
+        # for callback in callbacks:
+        #     self._app.add_handler(callback)
+
+        # logger.info(
+        #     'rpc.telegram is listening for following commands: %s',
+        #     [[x for x in sorted(h.commands)] for h in handles]
+        # )
         self._loop.run_until_complete(self._startup_telegram())
 
     async def _startup_telegram(self) -> None:
