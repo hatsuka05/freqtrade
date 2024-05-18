@@ -88,7 +88,7 @@ class Worker:
         if state != old_state:
 
             if old_state != State.RELOAD_CONFIG:
-                self.freqtrade.notify_status(f'{state.name.lower()}')
+                self.freqtrade.notify_status(f'[System] {state.name.lower()}')
 
             logger.info(
                 f"Changing state{f' from {old_state.name}' if old_state else ''} to: {state.name}")
@@ -186,8 +186,8 @@ class Worker:
             hint = 'Issue `/start` if you think it is safe to restart.'
 
             self.freqtrade.notify_status(
-                f'*OperationalException:*\n```\n{tb}```\n {hint}',
-                msg_type=RPCMessageType.EXCEPTION
+                f"*OperationalException: *\n```\n{tb}```\n {hint}",
+                msg_type=RPCMessageType.EXCEPTION,
             )
 
             logger.exception('OperationalException. Stopping trader ...')
@@ -207,7 +207,7 @@ class Worker:
         # Load and validate config and create new instance of the bot
         self._init(True)
 
-        self.freqtrade.notify_status('config reloaded')
+        self.freqtrade.notify_status("[System] config reloaded")
 
         # Tell systemd that we completed reconfiguration
         self._notify("READY=1")

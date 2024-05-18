@@ -96,7 +96,7 @@ class FtRestClient:
 
         :return: json object
         """
-        return self._post("reload_config")
+        return self._post("[System] reload_config")
 
     def balance(self):
         """Get the account balance.

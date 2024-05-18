@@ -336,42 +336,63 @@ class Telegram(RPCHandler):
         return ''
 
     def _format_entry_msg(self, msg: RPCEntryMsg) -> str:
+        # is_fill = msg['type'] in [RPCMessageType.ENTRY_FILL]
+        # emoji = '\N{CHECK MARK}' if is_fill else '\N{LARGE BLUE CIRCLE}'
+        # terminology = {
+        #     '1_enter': 'New Trade',
+        #     '1_entered': 'New Trade filled',
+        #     'x_enter': 'Increasing position',
+        #     'x_entered': 'Position increase filled',
+        # }
+        # key = f"{'x' if msg['sub_trade'] else '1'}_{'entered' if is_fill else 'enter'}"
+        # wording = terminology[key]
+        # message = (
+        #     f"{emoji} *{self._exchange_from_msg(msg)}:*"
+        #     f" {wording} (#{msg['trade_id']})\n"
+        #     f"*Pair:* `{msg['pair']}`\n"
+        # )
+        # message += self._add_analyzed_candle(msg['pair'])
+        # message += f"*Enter Tag:* `{msg['enter_tag']}`\n" if msg.get('enter_tag') else ""
+        # message += f"*Amount:* `{round_value(msg['amount'], 8)}`\n"
+        # message += f"*Direction:* `{msg['direction']}"
+        # if msg.get('leverage') and msg.get('leverage', 1.0) != 1.0:
+        #     message += f" ({msg['leverage']:.3g}x)"
+        # message += "`\n"
+        # message += f"*Open Rate:* `{round_value(msg['open_rate'], 8)} {msg['quote_currency']}`\n"
+        # if msg['type'] == RPCMessageType.ENTRY and msg['current_rate']:
+        #     message += (
+        # f"*Current Rate:* `{round_value(msg['current_rate'], 8)} {msg['quote_currency']}`\n"
+        #     )
+        # profit_fiat_extra = self.__format_profit_fiat(msg, 'stake_amount')  # type: ignore
+        # total = fmt_coin(msg['stake_amount'], msg['quote_currency'])
 
-        is_fill = msg['type'] in [RPCMessageType.ENTRY_FILL]
-        emoji = '\N{CHECK MARK}' if is_fill else '\N{LARGE BLUE CIRCLE}'
+        # message += f"*{'New ' if msg['sub_trade'] else ''}Total:* `{total}{profit_fiat_extra}`"
 
-        terminology = {
-            '1_enter': 'New Trade',
-            '1_entered': 'New Trade filled',
-            'x_enter': 'Increasing position',
-            'x_entered': 'Position increase filled',
-        }
+        # TODO: [stable-v2024] custom entry message
+        # df, _ = self._rpc._freqtrade.dataprovider.get_analyzed_dataframe(
+        #     msg["pair"], self._config["timeframe"]
+        # )
+        # last_candle = df.iloc[-1].squeeze()
+        # atr_main = last_candle["atr"]
+        # atr_1h = last_candle["atr_1h"]
+        # sl_main = (
+        #     (last_candle["low"] - atr_main * 1.5)
+        #     if msg["direction"] == "Long"
+        #     else (last_candle["high"] + atr_main * 1.5)
+        # )
+        # sl_1h = (
+        #     (last_candle["low"] - atr_1h * 1.5)
+        #     if msg["direction"] == "Long"
+        #     else (last_candle["high"] + atr_1h * 1.5)
+        # )
 
-        key = f"{'x' if msg['sub_trade'] else '1'}_{'entered' if is_fill else 'enter'}"
-        wording = terminology[key]
-
-        message = (
-            f"{emoji} *{self._exchange_from_msg(msg)}:*"
-            f" {wording} (#{msg['trade_id']})\n"
-            f"*Pair:* `{msg['pair']}`\n"
-        )
-        message += self._add_analyzed_candle(msg['pair'])
-        message += f"*Enter Tag:* `{msg['enter_tag']}`\n" if msg.get('enter_tag') else ""
-        message += f"*Amount:* `{round_value(msg['amount'], 8)}`\n"
-        message += f"*Direction:* `{msg['direction']}"
-        if msg.get('leverage') and msg.get('leverage', 1.0) != 1.0:
-            message += f" ({msg['leverage']:.3g}x)"
-        message += "`\n"
-        message += f"*Open Rate:* `{round_value(msg['open_rate'], 8)} {msg['quote_currency']}`\n"
-        if msg['type'] == RPCMessageType.ENTRY and msg['current_rate']:
-            message += (
-                f"*Current Rate:* `{round_value(msg['current_rate'], 8)} {msg['quote_currency']}`\n"
-            )
-
-        profit_fiat_extra = self.__format_profit_fiat(msg, 'stake_amount')  # type: ignore
-        total = fmt_coin(msg['stake_amount'], msg['quote_currency'])
-
-        message += f"*{'New ' if msg['sub_trade'] else ''}Total:* `{total}{profit_fiat_extra}`"
+        direction = "Buy Setup" if msg["direction"] == "Long" else "Sell Setup"
+        message = f"#{msg['pair'].split('/')[0]} {direction} ({self._config['timeframe']})\n"
+        message += f"Entry: `{round_value(msg['open_rate'], 8)} {msg['quote_currency']}`\n"
+        # TODO: thong tin TP1,2,3 lấy từ pivot point, thông tin SL lấy từ ATR
+        message += "TP: \n"
+        message += "SL: \n"
+        # message += f"SL: main {sl_main}, m5 {sl_1h}\n"
 
         return message
 
@@ -460,50 +481,56 @@ class Telegram(RPCHandler):
         return profit_fiat_extra
 
     def compose_message(self, msg: RPCSendMsg) -> Optional[str]:
-        if msg['type'] == RPCMessageType.ENTRY or msg['type'] == RPCMessageType.ENTRY_FILL:
+        # TODO: [stable-v2024] remove all msg khác ngoại trừ msg entry
+        if msg["type"] == RPCMessageType.ENTRY:
             message = self._format_entry_msg(msg)
 
-        elif msg['type'] == RPCMessageType.EXIT or msg['type'] == RPCMessageType.EXIT_FILL:
-            message = self._format_exit_msg(msg)
+        # if msg['type'] == RPCMessageType.ENTRY or msg['type'] == RPCMessageType.ENTRY_FILL:
+        #     message = self._format_entry_msg(msg)
 
-        elif (
-            msg['type'] == RPCMessageType.ENTRY_CANCEL
-            or msg['type'] == RPCMessageType.EXIT_CANCEL
-        ):
-            message_side = 'enter' if msg['type'] == RPCMessageType.ENTRY_CANCEL else 'exit'
-            message = (f"\N{WARNING SIGN} *{self._exchange_from_msg(msg)}:* "
-                       f"Cancelling {'partial ' if msg.get('sub_trade') else ''}"
-                       f"{message_side} Order for {msg['pair']} "
-                       f"(#{msg['trade_id']}). Reason: {msg['reason']}.")
+        # TODO: [stable-v2024] remove message khong can thiet
+        # elif msg['type'] == RPCMessageType.EXIT or msg['type'] == RPCMessageType.EXIT_FILL:
+        #     message = self._format_exit_msg(msg)
 
-        elif msg['type'] == RPCMessageType.PROTECTION_TRIGGER:
-            message = (
-                f"*Protection* triggered due to {msg['reason']}. "
-                f"`{msg['pair']}` will be locked until `{msg['lock_end_time']}`."
-            )
+        # elif (
+        #     msg['type'] == RPCMessageType.ENTRY_CANCEL
+        #     or msg['type'] == RPCMessageType.EXIT_CANCEL
+        # ):
+        #     message_side = 'enter' if msg['type'] == RPCMessageType.ENTRY_CANCEL else 'exit'
+        #     message = (f"\N{WARNING SIGN} *{self._exchange_from_msg(msg)}:* "
+        #                f"Cancelling {'partial ' if msg.get('sub_trade') else ''}"
+        #                f"{message_side} Order for {msg['pair']} "
+        #                f"(#{msg['trade_id']}). Reason: {msg['reason']}.")
 
-        elif msg['type'] == RPCMessageType.PROTECTION_TRIGGER_GLOBAL:
-            message = (
-                f"*Protection* triggered due to {msg['reason']}. "
-                f"*All pairs* will be locked until `{msg['lock_end_time']}`."
-            )
+        # elif msg['type'] == RPCMessageType.PROTECTION_TRIGGER:
+        #     message = (
+        #         f"*Protection* triggered due to {msg['reason']}. "
+        #         f"`{msg['pair']}` will be locked until `{msg['lock_end_time']}`."
+        #     )
 
-        elif msg['type'] == RPCMessageType.STATUS:
-            message = f"*Status:* `{msg['status']}`"
+        # elif msg['type'] == RPCMessageType.PROTECTION_TRIGGER_GLOBAL:
+        #     message = (
+        #         f"*Protection* triggered due to {msg['reason']}. "
+        #         f"*All pairs* will be locked until `{msg['lock_end_time']}`."
+        #     )
 
-        elif msg['type'] == RPCMessageType.WARNING:
-            message = f"\N{WARNING SIGN} *Warning:* `{msg['status']}`"
-        elif msg['type'] == RPCMessageType.EXCEPTION:
-            # Errors will contain exceptions, which are wrapped in triple ticks.
-            message = f"\N{WARNING SIGN} *ERROR:* \n {msg['status']}"
+        # elif msg['type'] == RPCMessageType.STATUS:
+        #     message = f"*Status:* `{msg['status']}`"
 
-        elif msg['type'] == RPCMessageType.STARTUP:
-            message = f"{msg['status']}"
-        elif msg['type'] == RPCMessageType.STRATEGY_MSG:
-            message = f"{msg['msg']}"
+        # elif msg['type'] == RPCMessageType.WARNING:
+        #     message = f"\N{WARNING SIGN} *Warning:* `{msg['status']}`"
+        # elif msg['type'] == RPCMessageType.EXCEPTION:
+        #     # Errors will contain exceptions, which are wrapped in triple ticks.
+        #     message = f"\N{WARNING SIGN} *ERROR:* \n {msg['status']}"
+
+        # elif msg['type'] == RPCMessageType.STARTUP:
+        #     message = f"{msg['status']}"
+        # elif msg['type'] == RPCMessageType.STRATEGY_MSG:
+        #     message = f"{msg['msg']}"
         else:
             logger.debug("Unknown message type: %s", msg['type'])
             return None
+
         return message
 
     def send_msg(self, msg: RPCSendMsg) -> None:
