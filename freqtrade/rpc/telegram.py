@@ -17,6 +17,7 @@ from math import isnan
 from threading import Thread
 from typing import Any, Callable, Coroutine, Dict, List, Literal, Optional, Union
 
+from pandas import DataFrame
 from tabulate import tabulate
 from telegram import (CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton,
                       ReplyKeyboardMarkup, Update)
@@ -369,32 +370,84 @@ class Telegram(RPCHandler):
         # message += f"*{'New ' if msg['sub_trade'] else ''}Total:* `{total}{profit_fiat_extra}`"
 
         # TODO: [stable-v2024] custom entry message
-        # df, _ = self._rpc._freqtrade.dataprovider.get_analyzed_dataframe(
-        #     msg["pair"], self._config["timeframe"]
-        # )
+        df, _ = self._rpc._freqtrade.dataprovider.get_analyzed_dataframe(
+            msg["pair"], self._config["timeframe"]
+        )
+        open_rate = msg['open_rate']
         # last_candle = df.iloc[-1].squeeze()
         # atr_main = last_candle["atr"]
         # atr_1h = last_candle["atr_1h"]
-        # sl_main = (
-        #     (last_candle["low"] - atr_main * 1.5)
-        #     if msg["direction"] == "Long"
-        #     else (last_candle["high"] + atr_main * 1.5)
-        # )
-        # sl_1h = (
-        #     (last_candle["low"] - atr_1h * 1.5)
-        #     if msg["direction"] == "Long"
-        #     else (last_candle["high"] + atr_1h * 1.5)
-        # )
 
-        direction = "Buy Setup" if msg["direction"] == "Long" else "Sell Setup"
-        message = f"#{msg['pair'].split('/')[0]} {direction} ({self._config['timeframe']})\n"
-        message += f"Entry: `{round_value(msg['open_rate'], 8)} {msg['quote_currency']}`\n"
-        # TODO: thong tin TP1,2,3 lấy từ pivot point, thông tin SL lấy từ ATR
-        message += "TP: \n"
-        message += "SL: \n"
-        # message += f"SL: main {sl_main}, m5 {sl_1h}\n"
+        title = f"#{msg['pair'].split('/')[0]} "
+        title += "Buy Setup" if msg["direction"] == "Long" else "Sell Setup"
+        title += f" ({self._config['timeframe']})"
+        message = f"{title}\n"
+
+        message += f"Entry: `{round_value(open_rate, open_rate < 1 and 8 or 0)} {msg['quote_currency']}`\n"
+
+        message += f"SL: `{self._format_sl_msg(dataframe=df, direction=msg['direction'], quote_currency=msg['quote_currency'], open_rate=open_rate)}`\n"
+
+        message += f"{self._format_tp_msg(dataframe=df, direction=msg['direction'], quote_currency=msg['quote_currency'])}\n"
 
         return message
+
+    def _format_tp_msg(self, dataframe: DataFrame, direction: str, quote_currency: str) -> str:
+        last_candle = dataframe.iloc[-1].squeeze()
+        r1 = last_candle['r1_1h']
+        r2 = last_candle['r2_1h']
+        r3 = last_candle['r3_1h']
+        r4 = last_candle['r4_1h']
+
+        s1 = last_candle['s1_1h']
+        s2 = last_candle['s2_1h']
+        s3 = last_candle['s3_1h']
+        s4 = last_candle['s4_1h']
+
+        msg = "---\n"
+
+        if direction == "Long":
+            msg += (
+                f"TP1: `{round_value(r1, 8) if r1 < 1 else round_value(r1, 0)} {quote_currency}`\n"
+                f"TP2: `{round_value(r2, 8) if r2 < 1 else round_value(r2, 0)} {quote_currency}`\n"
+                f"TP3: `{round_value(r3, 8) if r3 < 1 else round_value(r3, 0)} {quote_currency}`\n"
+                f"TP4: `{round_value(r4, 8) if r4 < 1 else round_value(r4, 0)} {quote_currency}`\n"
+            )
+        else:
+            msg += (
+                f"TP1: `{round_value(s1, 8) if s1 < 1 else round_value(s1, 0)} {quote_currency}`\n"
+                f"TP2: `{round_value(s2, 8) if s2 < 1 else round_value(s2, 0)} {quote_currency}`\n"
+                f"TP3: `{round_value(s3, 8) if s3 < 1 else round_value(s3, 0)} {quote_currency}`\n"
+                f"TP4: `{round_value(s4, 8) if s4 < 1 else round_value(s4, 0)} {quote_currency}`\n"
+            )
+
+        return msg
+
+    def _format_sl_msg(self, dataframe: DataFrame, direction: str, quote_currency: str, open_rate: float) -> str:
+        last_candle = dataframe.iloc[-1].squeeze()
+        r1 = last_candle['r1_1h']
+        r2 = last_candle['r2_1h']
+        r3 = last_candle['r3_1h']
+        r4 = last_candle['r4_1h']
+        r_list = [r1, r2, r3, r4]  # tang dan
+        # lay gia tri resistance dau tien lon hon open_rate lam diem khang cu
+        sl_short = next((resistance for resistance in r_list if resistance > open_rate), 9999999)
+
+        s1 = last_candle['s1_1h']
+        s2 = last_candle['s2_1h']
+        s3 = last_candle['s3_1h']
+        s4 = last_candle['s4_1h']
+        s_list = [s1, s2, s3, s4]  # giam dan
+        # lay gia tri support dau tien nho hon open_rate lam diem ho tro
+        sl_long = next((support for support in s_list if support < open_rate), -9999999)
+
+        if direction == "Long":
+            diff = round_value(((open_rate - sl_long) / open_rate) * 100, 1)
+            msg = f"{round_value(sl_long, 8) if sl_long < 1 else round_value(sl_long, 0)} {quote_currency} ({diff}%)"
+        else:
+            diff = round_value(((sl_short - open_rate) / open_rate) * 100, 1)
+            msg = f"{round_value(sl_short, 8) if sl_short < 1 else round_value(sl_short, 0)} {quote_currency} ({diff}%)"
+
+        return msg
 
     def _format_exit_msg(self, msg: RPCExitMsg) -> str:
         duration = msg['close_date'].replace(
