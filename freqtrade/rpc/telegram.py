@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 import re
+import os
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -34,7 +35,7 @@ from freqtrade.misc import chunks, plural
 from freqtrade.persistence import Trade
 from freqtrade.rpc import RPC, RPCException, RPCHandler
 from freqtrade.rpc.rpc_types import RPCEntryMsg, RPCExitMsg, RPCOrderMsg, RPCSendMsg
-from freqtrade.util import dt_from_ts, dt_humanize_delta, fmt_coin, format_date, round_value
+from freqtrade.util import dt_from_ts, dt_humanize_delta, fmt_coin, format_date, round_value, capture_tradingview_screenshot
 
 
 MAX_MESSAGE_LENGTH = MessageLimit.MAX_TEXT_LENGTH
@@ -392,6 +393,11 @@ class Telegram(RPCHandler):
         return message
 
     def _format_tp_msg(self, dataframe: DataFrame, direction: str, quote_currency: str) -> str:
+        required_columns = ["r1_1h", "r2_1h", "r3_1h", "r4_1h", "s1_1h", "s2_1h", "s3_1h", "s4_1h"]
+        if not all(column in dataframe.columns for column in required_columns):
+            # Nếu bất kỳ cột nào không tồn tại, trả về một chuỗi trống hoặc xử lý khác theo ý bạn
+            return ""
+
         last_candle = dataframe.iloc[-1].squeeze()
         r1 = last_candle['r1_1h']
         r2 = last_candle['r2_1h']
@@ -423,6 +429,11 @@ class Telegram(RPCHandler):
         return msg
 
     def _format_sl_msg(self, dataframe: DataFrame, direction: str, quote_currency: str, open_rate: float) -> str:
+        required_columns = ['r1_1h', 'r2_1h', 'r3_1h', 'r4_1h', 's1_1h', 's2_1h', 's3_1h', 's4_1h']
+        if not all(column in dataframe.columns for column in required_columns):
+            # Nếu bất kỳ cột nào không tồn tại, trả về một chuỗi trống hoặc xử lý khác theo ý bạn
+            return ""
+
         last_candle = dataframe.iloc[-1].squeeze()
         r1 = last_candle['r1_1h']
         r2 = last_candle['r2_1h']
@@ -534,9 +545,18 @@ class Telegram(RPCHandler):
         return profit_fiat_extra
 
     def compose_message(self, msg: RPCSendMsg) -> Optional[str]:
+        message = None
+        image_path = None
+
         # TODO: [stable-v2024] remove all msg khác ngoại trừ msg entry
         if msg["type"] == RPCMessageType.ENTRY:
             message = self._format_entry_msg(msg)
+
+            # get symbol from msg
+            # msg pair có dạng symbol/base_currency:base_currency
+            # example: BTC/USDT:USDT
+            # sẽ tách symbol = BTC
+            image_path = capture_tradingview_screenshot(symbol=msg["pair"].split("/")[0])
 
         # if msg['type'] == RPCMessageType.ENTRY or msg['type'] == RPCMessageType.ENTRY_FILL:
         #     message = self._format_entry_msg(msg)
@@ -582,9 +602,9 @@ class Telegram(RPCHandler):
         #     message = f"{msg['msg']}"
         else:
             logger.debug("Unknown message type: %s", msg['type'])
-            return None
+            return message, image_path
 
-        return message
+        return message, image_path
 
     def send_msg(self, msg: RPCSendMsg) -> None:
         """ Send a message to telegram channel """
@@ -610,10 +630,11 @@ class Telegram(RPCHandler):
             # Notification disabled
             return
 
-        message = self.compose_message(deepcopy(msg))
+        # TODO:
+        message, image_path = self.compose_message(deepcopy(msg))
         if message:
             asyncio.run_coroutine_threadsafe(
-                self._send_msg(message, disable_notification=(noti == 'silent')),
+                self._send_msg(message, disable_notification=(noti == 'silent'), image_path=image_path),
                 self._loop)
 
     def _get_exit_emoji(self, msg):
@@ -1936,7 +1957,8 @@ class Telegram(RPCHandler):
                         keyboard: Optional[List[List[InlineKeyboardButton]]] = None,
                         callback_path: str = "",
                         reload_able: bool = False,
-                        query: Optional[CallbackQuery] = None) -> None:
+                        query: Optional[CallbackQuery] = None,
+                        image_path: str = "",) -> None:
         """
         Send given markdown message
         :param msg: message
@@ -1958,28 +1980,56 @@ class Telegram(RPCHandler):
             else:
                 reply_markup = ReplyKeyboardMarkup(self._keyboard, resize_keyboard=True)
         try:
-            try:
-                await self._app.bot.send_message(
-                    self._config['telegram']['chat_id'],
-                    text=msg,
-                    parse_mode=parse_mode,
-                    reply_markup=reply_markup,
-                    disable_notification=disable_notification,
-                )
-            except NetworkError as network_err:
-                # Sometimes the telegram server resets the current connection,
-                # if this is the case we send the message again.
-                logger.warning(
-                    'Telegram NetworkError: %s! Trying one more time.',
-                    network_err.message
-                )
-                await self._app.bot.send_message(
-                    self._config['telegram']['chat_id'],
-                    text=msg,
-                    parse_mode=parse_mode,
-                    reply_markup=reply_markup,
-                    disable_notification=disable_notification,
-                )
+            if os.path.exists(image_path):
+                try:
+                    with open(image_path, 'rb') as photo:
+                        await self._app.bot.send_photo(
+                            self._config['telegram']['chat_id'],
+                            photo,
+                            caption=msg,
+                            parse_mode=parse_mode,
+                            reply_markup=reply_markup,
+                            disable_notification=disable_notification,
+                        )
+                except NetworkError as network_err:
+                    # Sometimes the telegram server resets the current connection,
+                    # if this is the case we send the message again.
+                    logger.warning(
+                        'Telegram NetworkError: %s! Trying one more time.',
+                        network_err.message
+                    )
+                    with open(image_path, 'rb') as photo:
+                        await self._app.bot.send_photo(
+                            self._config['telegram']['chat_id'],
+                            photo,
+                            caption=msg,
+                            parse_mode=parse_mode,
+                            reply_markup=reply_markup,
+                            disable_notification=disable_notification,
+                        )
+            else:
+                try:
+                    await self._app.bot.send_message(
+                        self._config['telegram']['chat_id'],
+                        text=msg,
+                        parse_mode=parse_mode,
+                        reply_markup=reply_markup,
+                        disable_notification=disable_notification,
+                    )
+                except NetworkError as network_err:
+                    # Sometimes the telegram server resets the current connection,
+                    # if this is the case we send the message again.
+                    logger.warning(
+                        'Telegram NetworkError: %s! Trying one more time.',
+                        network_err.message
+                    )
+                    await self._app.bot.send_message(
+                        self._config['telegram']['chat_id'],
+                        text=msg,
+                        parse_mode=parse_mode,
+                        reply_markup=reply_markup,
+                        disable_notification=disable_notification,
+                    )
         except TelegramError as telegram_err:
             logger.warning(
                 'TelegramError: %s! Giving up on that message.',

@@ -6,24 +6,25 @@ from freqtrade.util.ft_precise import FtPrecise
 from freqtrade.util.measure_time import MeasureTime
 from freqtrade.util.periodic_cache import PeriodicCache
 from freqtrade.util.template_renderer import render_template, render_template_with_fallback  # noqa
-
+from freqtrade.util.selenium_helper import capture_tradingview_screenshot
 
 __all__ = [
-    'dt_floor_day',
-    'dt_from_ts',
-    'dt_humanize_delta',
-    'dt_now',
-    'dt_ts',
-    'dt_ts_def',
-    'dt_ts_none',
-    'dt_utc',
-    'format_date',
-    'format_ms_time',
-    'FtPrecise',
-    'PeriodicCache',
-    'shorten_date',
-    'decimals_per_coin',
-    'round_value',
-    'fmt_coin',
-    'MeasureTime',
+    "dt_floor_day",
+    "dt_from_ts",
+    "dt_humanize_delta",
+    "dt_now",
+    "dt_ts",
+    "dt_ts_def",
+    "dt_ts_none",
+    "dt_utc",
+    "format_date",
+    "format_ms_time",
+    "FtPrecise",
+    "PeriodicCache",
+    "shorten_date",
+    "decimals_per_coin",
+    "round_value",
+    "fmt_coin",
+    "MeasureTime",
+    "capture_tradingview_screenshot",
 ]
